@@ -140,7 +140,7 @@ ui/app.py             Streamlit chat, a thin client over the API
 evals/                golden set, runner, scoring, reports, comparison, rescore
 db/                   Pagila fetch script (pinned + checksummed); init SQL for pgvector and the read-only role
 tests/                unit (no database, no model) and integration (skipped unless `make up`)
-docs/                 LOGGING.md, LOOM_SCRIPT.md
+docs/                 LOGGING.md; img/ holds the screenshots
 ```
 
 `make test` runs everything; `make lint` runs ruff.
