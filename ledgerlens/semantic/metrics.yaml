@@ -1,0 +1,214 @@
+# Curated business metrics. The agent reads these before writing SQL.
+# :start / :end are placeholders for a half-open date range (col >= :start AND col < :end).
+# Every canonical query is validated and executed by tests/integration/test_semantic_layer.py.
+metrics:
+  - name: gross_revenue
+    label: Gross revenue
+    description: Total money collected from customers, the sum of payment.amount.
+    grain: one row per payment
+    time_column: payment.payment_date
+    tables: [payment]
+    sql: |
+      SELECT ROUND(SUM(p.amount), 2) AS revenue
+      FROM payment p
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+    gotchas:
+      - Date revenue by payment_date, not rental_date. Payments and rentals are dated independently.
+      - There are no refunds; 24 payments are 0.00.
+
+  - name: revenue_by_month
+    label: Revenue by month
+    description: Gross revenue per calendar month, for trends over time.
+    grain: one row per payment, bucketed by month
+    time_column: payment.payment_date
+    tables: [payment]
+    sql: |
+      SELECT date_trunc('month', p.payment_date) AS month, ROUND(SUM(p.amount), 2) AS revenue
+      FROM payment p
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+      GROUP BY 1
+      ORDER BY 1
+    gotchas:
+      - Payments run from January to July 2022. The last month in the data is partial.
+
+  - name: revenue_by_store
+    label: Revenue by store
+    description: Gross revenue attributed to the store that owns the rented copy.
+    grain: one row per payment
+    time_column: payment.payment_date
+    tables: [payment, rental, inventory]
+    sql: |
+      SELECT i.store_id, ROUND(SUM(p.amount), 2) AS revenue
+      FROM payment p
+      JOIN rental r ON r.rental_id = p.rental_id
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+      GROUP BY i.store_id
+      ORDER BY revenue DESC
+    gotchas:
+      - Store comes from inventory.store_id (the same rule as Pagila's sales_by_store view).
+      - staff.store_id (where the payment was taken) differs for about half of all payments. Do not use it for store revenue.
+
+  - name: revenue_by_category
+    label: Revenue by film category
+    description: Gross revenue per film category (genre).
+    grain: one row per payment
+    time_column: payment.payment_date
+    tables: [payment, rental, inventory, film_category, category]
+    sql: |
+      SELECT c.name AS category, ROUND(SUM(p.amount), 2) AS revenue
+      FROM payment p
+      JOIN rental r ON r.rental_id = p.rental_id
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      JOIN film_category fc ON fc.film_id = i.film_id
+      JOIN category c ON c.category_id = fc.category_id
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+      GROUP BY c.name
+      ORDER BY revenue DESC
+    gotchas:
+      - Reach the category through the rented copy (payment -> rental -> inventory -> film_category). Every film has exactly one category, so this path does not multiply payments.
+      - Never join inventory to film_category's films through anything but the rented inventory_id; joining all copies of a film multiplies each payment.
+
+  - name: revenue_by_country
+    label: Revenue by customer country
+    description: Gross revenue per customer country.
+    grain: one row per payment
+    time_column: payment.payment_date
+    tables: [payment, customer, address, city, country]
+    sql: |
+      SELECT co.country, ROUND(SUM(p.amount), 2) AS revenue
+      FROM payment p
+      JOIN customer cu ON cu.customer_id = p.customer_id
+      JOIN address a ON a.address_id = cu.address_id
+      JOIN city ci ON ci.city_id = a.city_id
+      JOIN country co ON co.country_id = ci.country_id
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+      GROUP BY co.country
+      ORDER BY revenue DESC
+      LIMIT 10
+    gotchas:
+      - customer has no country or city column. Location is customer -> address -> city -> country.
+
+  - name: rental_count
+    label: Rentals
+    description: Number of rentals (copies rented out).
+    grain: one row per rental
+    time_column: rental.rental_date
+    tables: [rental]
+    sql: |
+      SELECT COUNT(*) AS rentals
+      FROM rental r
+      WHERE r.rental_date >= :start AND r.rental_date < :end
+    gotchas:
+      - Rentals exist for Feb 2022 and May-Aug 2022 only.
+
+  - name: rentals_by_store_by_month
+    label: Rentals per store per month
+    description: Number of rentals per store per calendar month.
+    grain: one row per rental, bucketed by store and month
+    time_column: rental.rental_date
+    tables: [rental, inventory]
+    sql: |
+      SELECT date_trunc('month', r.rental_date) AS month, i.store_id, COUNT(*) AS rentals
+      FROM rental r
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      WHERE r.rental_date >= :start AND r.rental_date < :end
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    gotchas:
+      - Store comes from inventory.store_id, the store that owns the rented copy.
+
+  - name: active_customers
+    label: Active customers
+    description: Customers with at least one rental in the period.
+    grain: one row per customer
+    time_column: rental.rental_date
+    tables: [rental]
+    sql: |
+      SELECT COUNT(DISTINCT r.customer_id) AS active_customers
+      FROM rental r
+      WHERE r.rental_date >= :start AND r.rental_date < :end
+    gotchas:
+      - customer.activebool and customer.active are account-status flags, not recent activity. Do not use them for this metric.
+
+  - name: late_return_rate
+    label: Late return rate
+    description: Share of returned rentals that came back after the film's allowed rental duration.
+    grain: one row per returned rental
+    time_column: rental.rental_date
+    tables: [rental, inventory, film]
+    sql: |
+      SELECT ROUND(AVG(CASE WHEN r.return_date > r.rental_date + f.rental_duration * INTERVAL '1 day'
+                            THEN 1.0 ELSE 0.0 END), 4) AS late_return_rate
+      FROM rental r
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      JOIN film f ON f.film_id = i.film_id
+      WHERE r.return_date IS NOT NULL
+        AND r.rental_date >= :start AND r.rental_date < :end
+    gotchas:
+      - A fraction between 0 and 1. Unreturned rentals (return_date IS NULL) are excluded; see outstanding_rentals.
+
+  - name: avg_rental_duration
+    label: Average rental duration
+    description: Average number of days a rented copy is kept, for returned rentals.
+    grain: one row per returned rental
+    time_column: rental.rental_date
+    tables: [rental]
+    sql: |
+      SELECT ROUND(AVG(EXTRACT(EPOCH FROM r.return_date - r.rental_date) / 86400), 2) AS avg_rental_days
+      FROM rental r
+      WHERE r.return_date IS NOT NULL
+        AND r.rental_date >= :start AND r.rental_date < :end
+
+  - name: top_customers_by_lifetime_value
+    label: Top customers by lifetime value
+    description: Customers ranked by total payments across all time.
+    grain: one row per payment, summed per customer
+    time_column: payment.payment_date
+    tables: [payment, customer]
+    sql: |
+      SELECT cu.customer_id, cu.first_name || ' ' || cu.last_name AS customer,
+             ROUND(SUM(p.amount), 2) AS lifetime_value
+      FROM payment p
+      JOIN customer cu ON cu.customer_id = p.customer_id
+      GROUP BY cu.customer_id, cu.first_name, cu.last_name
+      ORDER BY lifetime_value DESC
+      LIMIT 10
+    gotchas:
+      - Lifetime means all payments. Add a date filter only if the question names a period.
+
+  - name: average_payment
+    label: Average payment
+    description: Average amount of a single payment.
+    grain: one row per payment
+    time_column: payment.payment_date
+    tables: [payment]
+    sql: |
+      SELECT ROUND(AVG(p.amount), 2) AS avg_payment
+      FROM payment p
+      WHERE p.payment_date >= :start AND p.payment_date < :end
+
+  - name: outstanding_rentals
+    label: Outstanding rentals
+    description: Copies rented out and not yet returned, as of the latest data.
+    grain: one row per rental
+    time_column: rental.rental_date
+    tables: [rental]
+    sql: |
+      SELECT COUNT(*) AS outstanding_rentals
+      FROM rental r
+      WHERE r.return_date IS NULL
+    gotchas:
+      - No date filter unless the question asks about rentals made in a specific period.
+
+  - name: inventory_by_store
+    label: Inventory by store
+    description: Physical copies and distinct film titles held by each store.
+    grain: one row per copy
+    time_column: null
+    tables: [inventory]
+    sql: |
+      SELECT i.store_id, COUNT(*) AS copies, COUNT(DISTINCT i.film_id) AS titles
+      FROM inventory i
+      GROUP BY i.store_id
+      ORDER BY i.store_id

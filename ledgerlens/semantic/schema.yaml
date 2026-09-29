@@ -1,0 +1,132 @@
+# Tables the agent is told about, and how they join. Checked against the live database by
+# tests/integration/test_semantic_layer.py.
+tables:
+  payment:
+    description: One row per customer payment. The source of all revenue.
+    columns:
+      payment_id: primary key
+      customer_id: customer who paid
+      staff_id: staff member who took the payment
+      rental_id: the rental being paid for
+      amount: amount paid, USD
+      payment_date: when the payment was made
+  rental:
+    description: One row per rental of a physical copy.
+    columns:
+      rental_id: primary key
+      rental_date: when the copy was rented out
+      inventory_id: the copy rented
+      customer_id: customer who rented it
+      return_date: when it came back; NULL while still out
+      staff_id: staff member who handled the rental
+  inventory:
+    description: One row per physical copy of a film, owned by one store.
+    columns:
+      inventory_id: primary key
+      film_id: the film this copy is of
+      store_id: store that owns the copy
+  film:
+    description: One row per film title.
+    columns:
+      film_id: primary key
+      title: film title
+      release_year: year of release
+      language_id: language of the film
+      rental_duration: days a rental may last before it is late
+      rental_rate: price per rental, USD
+      length: running time in minutes
+      replacement_cost: cost to replace a lost copy, USD
+      rating: MPAA rating (G, PG, PG-13, R, NC-17)
+  film_category:
+    description: Links a film to its category. Every film has exactly one category.
+    columns:
+      film_id: the film
+      category_id: its category
+  category:
+    description: Film categories (genres), 16 in total.
+    columns:
+      category_id: primary key
+      name: category name, e.g. Action, Comedy
+  customer:
+    description: One row per customer. Has no location columns; use address -> city -> country.
+    columns:
+      customer_id: primary key
+      store_id: home store the customer signed up at
+      first_name: first name
+      last_name: last name
+      email: email address
+      address_id: the customer's address
+      activebool: account status flag, not recent activity
+      create_date: sign-up date
+  address:
+    description: Street addresses of customers, staff and stores.
+    columns:
+      address_id: primary key
+      address: street address
+      district: district or region
+      city_id: the city
+      postal_code: postal code
+      phone: phone number
+  city:
+    description: Cities.
+    columns:
+      city_id: primary key
+      city: city name
+      country_id: the country
+  country:
+    description: Countries.
+    columns:
+      country_id: primary key
+      country: country name
+  store:
+    description: The two stores.
+    columns:
+      store_id: primary key
+      manager_staff_id: the store's manager
+      address_id: the store's address
+  staff:
+    description: Store employees (two in total).
+    columns:
+      staff_id: primary key
+      first_name: first name
+      last_name: last name
+      store_id: store the employee works at
+      active: whether the employee is active
+  actor:
+    description: Film actors.
+    columns:
+      actor_id: primary key
+      first_name: first name
+      last_name: last name
+  film_actor:
+    description: Links films to actors. A film has many actors.
+    columns:
+      actor_id: the actor
+      film_id: the film
+  language:
+    description: Film languages.
+    columns:
+      language_id: primary key
+      name: language name
+
+# "many.column -> one.column": each row on the left matches at most one row on the right.
+joins:
+  - payment.rental_id -> rental.rental_id
+  - payment.customer_id -> customer.customer_id
+  - payment.staff_id -> staff.staff_id
+  - rental.inventory_id -> inventory.inventory_id
+  - rental.customer_id -> customer.customer_id
+  - rental.staff_id -> staff.staff_id
+  - inventory.film_id -> film.film_id
+  - inventory.store_id -> store.store_id
+  - film_category.film_id -> film.film_id
+  - film_category.category_id -> category.category_id
+  - film_actor.film_id -> film.film_id
+  - film_actor.actor_id -> actor.actor_id
+  - film.language_id -> language.language_id
+  - customer.address_id -> address.address_id
+  - customer.store_id -> store.store_id
+  - staff.store_id -> store.store_id
+  - store.address_id -> address.address_id
+  - address.city_id -> city.city_id
+  - city.country_id -> country.country_id

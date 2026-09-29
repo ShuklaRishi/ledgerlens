@@ -1,0 +1,258 @@
+# Golden set. Each case: a question, what a correct agent does, and hand-written ground-truth
+# SQL. Expected values are never hard-coded: evals/run.py runs this SQL to get them.
+#
+# expected_route: metric_lookup | custom_sql | clarify | out_of_scope
+#   (metric_lookup and custom_sql both count as "answer with data" when scoring)
+# expected_output_type: stat | line | bar | table | clarify | none, or a list of acceptable ones
+# targets: the failure mode the case probes, or null for a baseline
+# Relative dates are resolved by hand against the data: payments end 2022-07-27, rentals
+# end 2022-08-23.
+
+cases:
+  # --- baselines ------------------------------------------------------------------------
+  - id: revenue_june
+    question: What was total revenue in June 2022?
+    user_role: leadership
+    expected_route: metric_lookup
+    expected_output_type: stat
+    targets: null
+    sql: |
+      SELECT ROUND(SUM(p.amount), 2) FROM payment p
+      WHERE p.payment_date >= '2022-06-01' AND p.payment_date < '2022-07-01'
+
+  - id: copies_by_store
+    question: How many film copies does each store hold?
+    user_role: am
+    expected_route: metric_lookup
+    expected_output_type: [bar, table]  # copies alone, or with titles
+    targets: null
+    sql: |
+      SELECT i.store_id, COUNT(*) FROM inventory i GROUP BY i.store_id
+
+  - id: top_customers_ltv
+    question: Who are our top 5 customers by lifetime value?
+    user_role: sales
+    expected_route: metric_lookup
+    expected_output_type: [table, bar]  # with or without customer ids
+    targets: null
+    sql: |
+      SELECT cu.first_name || ' ' || cu.last_name, ROUND(SUM(p.amount), 2)
+      FROM payment p JOIN customer cu ON cu.customer_id = p.customer_id
+      GROUP BY cu.customer_id, cu.first_name, cu.last_name
+      ORDER BY 2 DESC LIMIT 5
+
+  - id: top_categories_june
+    question: Which 5 film categories earned the most in June 2022?
+    user_role: am
+    expected_route: metric_lookup
+    expected_output_type: bar
+    targets: null
+    sql: |
+      SELECT c.name, ROUND(SUM(p.amount), 2)
+      FROM payment p
+      JOIN rental r ON r.rental_id = p.rental_id
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      JOIN film_category fc ON fc.film_id = i.film_id
+      JOIN category c ON c.category_id = fc.category_id
+      WHERE p.payment_date >= '2022-06-01' AND p.payment_date < '2022-07-01'
+      GROUP BY c.name ORDER BY 2 DESC LIMIT 5
+
+  # --- date_boundary: relative dates must resolve against the data, not the clock --------
+  - id: revenue_last_month
+    question: What was revenue last month?
+    user_role: leadership
+    expected_route: metric_lookup
+    expected_output_type: stat
+    targets: date_boundary
+    sql: |
+      SELECT ROUND(SUM(p.amount), 2) FROM payment p
+      WHERE p.payment_date >= '2022-06-01' AND p.payment_date < '2022-07-01'
+
+  - id: rentals_by_store_last_month
+    question: How many rentals did each store have last month?
+    user_role: am
+    expected_route: metric_lookup
+    expected_output_type: bar
+    targets: date_boundary
+    sql: |
+      SELECT i.store_id, COUNT(*) FROM rental r
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      WHERE r.rental_date >= '2022-07-01' AND r.rental_date < '2022-08-01'
+      GROUP BY i.store_id
+
+  - id: active_customers_last_7_days
+    question: How many customers rented something in the last 7 days?
+    user_role: sales
+    expected_route: metric_lookup
+    expected_output_type: stat
+    targets: date_boundary
+    sql: |
+      SELECT COUNT(DISTINCT r.customer_id) FROM rental r
+      WHERE r.rental_date >= '2022-08-17' AND r.rental_date < '2022-08-24'
+
+  # --- skipped_visualisation: time series should come back as a chart ------------------
+  - id: revenue_trend_this_year
+    question: How has monthly revenue trended this year?
+    user_role: leadership
+    expected_route: metric_lookup
+    expected_output_type: line
+    targets: skipped_visualisation
+    sql: |
+      SELECT date_trunc('month', p.payment_date), ROUND(SUM(p.amount), 2) FROM payment p
+      WHERE p.payment_date >= '2022-01-01' AND p.payment_date < '2022-07-28'
+      GROUP BY 1
+
+  - id: monthly_rentals_2022
+    question: Show the monthly number of rentals in 2022.
+    user_role: am
+    expected_route: metric_lookup
+    expected_output_type: line
+    targets: skipped_visualisation
+    sql: |
+      SELECT date_trunc('month', r.rental_date), COUNT(*) FROM rental r
+      WHERE r.rental_date >= '2022-01-01' AND r.rental_date < '2023-01-01'
+      GROUP BY 1
+
+  - id: rentals_per_store_per_month
+    question: How many rentals did each store have per month in 2022?
+    user_role: am
+    expected_route: metric_lookup
+    expected_output_type: line
+    targets: skipped_visualisation
+    sql: |
+      SELECT date_trunc('month', r.rental_date), i.store_id, COUNT(*) FROM rental r
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      WHERE r.rental_date >= '2022-01-01' AND r.rental_date < '2023-01-01'
+      GROUP BY 1, 2
+
+  # --- fanout_join: two facts (payments, rentals) must be aggregated separately ---------
+  - id: store_revenue_and_rentals_june
+    question: Show revenue and number of rentals for each store in June 2022.
+    user_role: leadership
+    expected_route: custom_sql
+    expected_output_type: table
+    targets: fanout_join
+    sql: |
+      WITH rev AS (
+        SELECT i.store_id, ROUND(SUM(p.amount), 2) AS revenue FROM payment p
+        JOIN rental r ON r.rental_id = p.rental_id
+        JOIN inventory i ON i.inventory_id = r.inventory_id
+        WHERE p.payment_date >= '2022-06-01' AND p.payment_date < '2022-07-01'
+        GROUP BY i.store_id
+      ), ren AS (
+        SELECT i.store_id, COUNT(*) AS rentals FROM rental r
+        JOIN inventory i ON i.inventory_id = r.inventory_id
+        WHERE r.rental_date >= '2022-06-01' AND r.rental_date < '2022-07-01'
+        GROUP BY i.store_id
+      )
+      SELECT rev.store_id, rev.revenue, ren.rentals FROM rev JOIN ren USING (store_id)
+
+  - id: category_revenue_and_rentals_july
+    question: For the top 5 film categories by revenue in July 2022, show revenue and number of rentals.
+    user_role: am
+    expected_route: custom_sql
+    expected_output_type: table
+    targets: fanout_join
+    sql: |
+      WITH rev AS (
+        SELECT fc.category_id, ROUND(SUM(p.amount), 2) AS revenue FROM payment p
+        JOIN rental r ON r.rental_id = p.rental_id
+        JOIN inventory i ON i.inventory_id = r.inventory_id
+        JOIN film_category fc ON fc.film_id = i.film_id
+        WHERE p.payment_date >= '2022-07-01' AND p.payment_date < '2022-08-01'
+        GROUP BY fc.category_id
+      ), ren AS (
+        SELECT fc.category_id, COUNT(*) AS rentals FROM rental r
+        JOIN inventory i ON i.inventory_id = r.inventory_id
+        JOIN film_category fc ON fc.film_id = i.film_id
+        WHERE r.rental_date >= '2022-07-01' AND r.rental_date < '2022-08-01'
+        GROUP BY fc.category_id
+      )
+      SELECT c.name, rev.revenue, ren.rentals FROM category c
+      JOIN rev ON rev.category_id = c.category_id
+      JOIN ren ON ren.category_id = c.category_id
+      ORDER BY rev.revenue DESC LIMIT 5
+
+  # --- hallucinated_column: answers need join paths (customer -> address -> city -> ...) --
+  - id: customers_by_country
+    question: How many customers are there in each country? Top 5.
+    user_role: sales
+    expected_route: custom_sql
+    expected_output_type: bar
+    targets: hallucinated_column
+    sql: |
+      SELECT co.country, COUNT(*) FROM customer cu
+      JOIN address a ON a.address_id = cu.address_id
+      JOIN city ci ON ci.city_id = a.city_id
+      JOIN country co ON co.country_id = ci.country_id
+      GROUP BY co.country ORDER BY 2 DESC LIMIT 5
+
+  - id: top_countries_revenue_june
+    question: Which 5 countries generated the most revenue in June 2022?
+    user_role: leadership
+    expected_route: metric_lookup
+    expected_output_type: bar
+    targets: hallucinated_column
+    sql: |
+      SELECT co.country, ROUND(SUM(p.amount), 2) FROM payment p
+      JOIN customer cu ON cu.customer_id = p.customer_id
+      JOIN address a ON a.address_id = cu.address_id
+      JOIN city ci ON ci.city_id = a.city_id
+      JOIN country co ON co.country_id = ci.country_id
+      WHERE p.payment_date >= '2022-06-01' AND p.payment_date < '2022-07-01'
+      GROUP BY co.country ORDER BY 2 DESC LIMIT 5
+
+  - id: late_return_top_categories_july
+    question: Which 3 film categories had the highest late return rate in July 2022?
+    user_role: am
+    expected_route: custom_sql
+    expected_output_type: bar
+    targets: hallucinated_column
+    sql: |
+      SELECT c.name, ROUND(AVG(CASE WHEN r.return_date > r.rental_date + f.rental_duration * INTERVAL '1 day'
+                                    THEN 1.0 ELSE 0.0 END), 4)
+      FROM rental r
+      JOIN inventory i ON i.inventory_id = r.inventory_id
+      JOIN film f ON f.film_id = i.film_id
+      JOIN film_category fc ON fc.film_id = f.film_id
+      JOIN category c ON c.category_id = fc.category_id
+      WHERE r.return_date IS NOT NULL
+        AND r.rental_date >= '2022-07-01' AND r.rental_date < '2022-08-01'
+      GROUP BY c.name ORDER BY 2 DESC LIMIT 3
+
+  # --- wrong_route: vague questions deserve a clarifying question -----------------------
+  - id: vague_how_did_we_do
+    question: How did we do last month?
+    user_role: leadership
+    expected_route: clarify
+    expected_output_type: clarify
+    targets: wrong_route
+
+  - id: vague_which_store_better
+    question: Which store is doing better?
+    user_role: am
+    expected_route: clarify
+    expected_output_type: clarify
+    targets: wrong_route
+
+  - id: vague_business_update
+    question: Give me a quick update on the business.
+    user_role: leadership
+    expected_route: clarify
+    expected_output_type: clarify
+    targets: wrong_route
+
+  # --- out of scope ----------------------------------------------------------------------
+  - id: forecast_rentals
+    question: Predict how many rentals we will have next month.
+    user_role: sales
+    expected_route: out_of_scope
+    expected_output_type: none
+    targets: null
+
+  - id: staff_salaries
+    question: What is the average salary of our staff?
+    user_role: dev
+    expected_route: out_of_scope
+    expected_output_type: none
+    targets: null
