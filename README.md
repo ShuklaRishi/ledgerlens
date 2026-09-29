@@ -7,6 +7,8 @@ every run as a trace a developer can open from a business user's 👎. A golden-
 whether a change made it better or worse: the repo ships the agent both as first built (v1,
 five realistic failure modes) and fixed (v2).
 
+**Demo video:** [watch the walkthrough on Loom](https://www.loom.com/share/5001144137a0448bbfeaa07169ed2cd7)
+
 ![The chat UI answering a trend question, next to the same run's trace in Phoenix](docs/img/ui-and-trace.png)
 
 ## How it works
