@@ -12,6 +12,9 @@ from ledgerlens.sql.executor import QueryResult
 from ledgerlens.viz.charts import OutputType
 
 Route = Literal["metric_lookup", "custom_sql", "clarify", "out_of_scope"]
+UserRole = Literal["am", "sales", "leadership", "dev"]
+AnswerStatus = Literal["answered", "clarify", "out_of_scope", "failed"]
+SqlStage = Literal["validate", "execute", "check"]  # check: sent back by the fan-out check
 
 
 class RouteDecision(BaseModel):
@@ -27,7 +30,7 @@ class RouteDecision(BaseModel):
 
 class SqlAttempt(BaseModel):
     attempt: int
-    stage: Literal["validate", "execute", "check"]  # check: sent back by the fan-out check
+    stage: SqlStage
     sql: str
     errors: list[str]
 
@@ -38,7 +41,7 @@ class Chart(BaseModel):
 
 
 class Answer(BaseModel):
-    status: Literal["answered", "clarify", "out_of_scope", "failed"]
+    status: AnswerStatus
     headline: str
     interpretation: str | None = None
     definition: str | None = None  # the metric definition used, when one applied
@@ -50,7 +53,7 @@ class AgentState(TypedDict, total=False):
     # input
     run_id: str
     question: str
-    user_role: str
+    user_role: UserRole
     chart_file: str  # where render_chart may write the PNG
     # set by the nodes, in graph order
     context: RetrievedContext
@@ -66,3 +69,8 @@ class AgentState(TypedDict, total=False):
     chart: Chart
     answer: Answer
     chart_requested: bool  # only in v1 (skipped_visualisation): the model's say on charting
+
+
+def record_attempt(state: AgentState, stage: SqlStage, errors: list[str]) -> SqlAttempt:
+    """The current SQL attempt and what went wrong with it, for the run's attempt log."""
+    return SqlAttempt(attempt=state["sql_attempts"], stage=stage, sql=state["sql"], errors=errors)

@@ -8,11 +8,14 @@ from typing import Any
 from pydantic import BaseModel, computed_field
 
 from evals.cases import DATA_ROUTES, GoldenCase
+from ledgerlens.agent.llm import TRANSIENT_STATUS_CODES
 from ledgerlens.schemas.run import RunRecord
 from ledgerlens.sql.catalog import Catalog
+from ledgerlens.sql.executor import is_number
 from ledgerlens.sql.validator import validate_sql
 
-_PROVIDER_ERRORS = ("429", "500", "502", "503", "504", "DEADLINE_EXCEEDED", "Timeout")
+# Matched against the saved error text: the retried status codes, plus timeouts.
+_PROVIDER_ERRORS = (*map(str, TRANSIENT_STATUS_CODES), "DEADLINE_EXCEEDED", "Timeout")
 
 
 class CaseResult(BaseModel):
@@ -145,6 +148,15 @@ def by_target(results: list[CaseResult]) -> dict[str, dict[str, int]]:
     return groups
 
 
+def report_sections(results: list[CaseResult]) -> dict[str, Any]:
+    """Everything in a report but its meta; evals.run writes it, evals.rescore rewrites it."""
+    return {
+        "summary": summarize(results),
+        "by_target": by_target(results),
+        "results": [result.model_dump() for result in results],
+    }
+
+
 def _output_type(record: RunRecord) -> str:
     if record.status == "clarify":
         return "clarify"
@@ -156,7 +168,7 @@ def _output_type(record: RunRecord) -> str:
 def _same(expected: Any, actual: Any, tolerance: float) -> bool:
     if isinstance(expected, date) or isinstance(actual, date):
         return _day(expected) == _day(actual)
-    if _is_number(expected) and _is_number(actual):
+    if is_number(expected) and is_number(actual):
         if isinstance(expected, int) and isinstance(actual, int):
             return expected == actual  # counts must be exact
         close = [
@@ -173,10 +185,6 @@ def _day(value: Any) -> str:
     if isinstance(value, date):
         return value.isoformat()
     return str(value)[:10]
-
-
-def _is_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 def _share(flags: Any) -> float | None:

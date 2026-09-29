@@ -14,3 +14,6 @@ db/pagila/
 
 # per-run records and charts; eval reports under evals/reports/ ARE committed
 runs/
+
+# macOS
+.DS_Store

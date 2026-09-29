@@ -2,9 +2,11 @@
 
 import argparse
 from textwrap import indent
+from typing import get_args
 
 import psycopg
 
+from ledgerlens.agent.state import UserRole
 from ledgerlens.core.config import get_settings
 from ledgerlens.core.logging import setup_logging
 from ledgerlens.core.tracing import setup_tracing, shutdown_tracing
@@ -26,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     commands.add_parser("seed", help="embed the semantic layer into pgvector (local model, no API)")
     ask = commands.add_parser("ask", help="answer a business question")
     ask.add_argument("question")
-    ask.add_argument("--role", choices=["am", "sales", "leadership", "dev"], default="dev")
+    ask.add_argument("--role", choices=get_args(UserRole), default="dev")
     ask.add_argument("--session", default=None, help="group turns of one conversation")
     ask.add_argument("-v", "--verbose", action="store_true", help="show the agent's logs")
     args = parser.parse_args(argv)
@@ -55,7 +57,7 @@ def _seed() -> int:
     return 0
 
 
-def _ask(question: str, role: str, session: str | None, verbose: bool) -> int:
+def _ask(question: str, role: UserRole, session: str | None, verbose: bool) -> int:
     settings = get_settings()
     setup_logging("INFO" if verbose else "CRITICAL")  # failures are summarised below either way
     tracer_provider = setup_tracing(settings)

@@ -8,12 +8,12 @@ from ledgerlens.agent.deps import AgentDeps
 from ledgerlens.agent.failure_modes import FailureMode
 from ledgerlens.agent.llm import ask_structured
 from ledgerlens.agent.prompts import render_prompt
-from ledgerlens.agent.state import AgentState, Answer
+from ledgerlens.agent.state import AgentState, Answer, UserRole
 from ledgerlens.sql.checks import query_limit
 from ledgerlens.sql.executor import QueryResult
 from ledgerlens.viz.charts import format_table
 
-AUDIENCE = {
+AUDIENCE: dict[UserRole, str] = {
     "am": "an account manager",
     "sales": "a salesperson",
     "leadership": "a member of the leadership team",

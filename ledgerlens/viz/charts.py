@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 
-from ledgerlens.sql.executor import QueryResult
+from ledgerlens.sql.executor import QueryResult, is_number
 
 OutputType = Literal["stat", "line", "bar", "table"]
 
@@ -98,7 +98,7 @@ def format_value(column: str, value: Any) -> str:
         )
     if isinstance(value, date):
         return value.isoformat()
-    if column.endswith("_id") or not isinstance(value, int | float) or isinstance(value, bool):
+    if column.endswith("_id") or not is_number(value):
         return str(value)
     name = column.lower()
     if name.endswith(_RATE_SUFFIXES) and name != "rental_rate" and abs(value) <= 1:

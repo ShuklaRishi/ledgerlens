@@ -12,7 +12,7 @@ import psycopg
 
 from ledgerlens.agent.deps import AgentDeps
 from ledgerlens.agent.failure_modes import FailureMode
-from ledgerlens.agent.state import AgentState, SqlAttempt
+from ledgerlens.agent.state import AgentState, record_attempt
 from ledgerlens.sql.checks import ResultWarning, fanout_probe, fanout_warning, result_warnings
 
 log = logging.getLogger(__name__)
@@ -26,9 +26,7 @@ def run(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     fanout = _fanout_warnings(state["sql"], deps)
     if fanout and state["sql_attempts"] < deps.settings.max_sql_attempts:
         errors = [w.message for w in fanout]
-        attempt = SqlAttempt(
-            attempt=state["sql_attempts"], stage="check", sql=state["sql"], errors=errors
-        )
+        attempt = record_attempt(state, "check", errors)
         return {"warnings": warnings + fanout, "sql_errors": errors, "attempt_log": [attempt]}
     return {"warnings": warnings + fanout}  # out of attempts: answer, with the warning shown
 

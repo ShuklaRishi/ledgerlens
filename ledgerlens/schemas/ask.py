@@ -1,8 +1,8 @@
-from typing import Literal
+"""POST /v1/ask request body."""
 
 from pydantic import BaseModel, Field
 
-UserRole = Literal["am", "sales", "leadership", "dev"]
+from ledgerlens.agent.state import UserRole
 
 
 class AskRequest(BaseModel):

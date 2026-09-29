@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from ledgerlens.agent.state import Answer, RouteDecision, SqlAttempt
+from ledgerlens.agent.state import Answer, AnswerStatus, RouteDecision, SqlAttempt, UserRole
 from ledgerlens.semantic.retrieval import RetrievedContext
 from ledgerlens.sql.checks import ResultWarning
 from ledgerlens.sql.dates import DateContext
@@ -26,7 +26,7 @@ class RunRecord(BaseModel):
     trace_url: str | None = None  # opens the trace in Phoenix
     created_at: datetime
     question: str
-    user_role: str
+    user_role: UserRole
     session_id: str | None
     eval_case_id: str | None = None
     agent_version: str
@@ -34,7 +34,7 @@ class RunRecord(BaseModel):
     model: str
     latency_ms: int
     usage: Usage
-    status: Literal["answered", "clarify", "out_of_scope", "failed", "error"]
+    status: AnswerStatus | Literal["error"]  # error: the run crashed
     answer: Answer | None = None
     route: RouteDecision | None = None
     retrieved: RetrievedContext | None = None

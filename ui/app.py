@@ -15,6 +15,7 @@ import httpx
 import pandas as pd
 import streamlit as st
 
+from ledgerlens.sql.executor import is_number
 from ledgerlens.viz.charts import format_value, pretty
 
 API_URL = os.environ.get("LEDGERLENS_API_URL", "http://localhost:8000")
@@ -92,6 +93,9 @@ def ask(question: str, role: str) -> Run | None:
     except httpx.HTTPError as exc:
         st.error(f"Can't reach the Ledgerlens API at {API_URL} ({exc}). Is `make api` running?")
         return None
+    if not response.headers.get("content-type", "").startswith("application/json"):
+        st.error(f"The API returned {response.status_code}: {response.text[:300]}")
+        return None
     body = response.json()
     if response.status_code == 500 and "run_id" in body:  # the agent crashed; its run was saved
         return fetch_run(body["run_id"])
@@ -152,7 +156,7 @@ def show_result(run: Run) -> None:
             (
                 i
                 for i in reversed(range(len(columns)))
-                if _is_number(rows[0][i]) and not columns[i].endswith("_id")
+                if is_number(rows[0][i]) and not columns[i].endswith("_id")
             ),
             len(columns) - 1,
         )
@@ -211,10 +215,6 @@ def show_feedback(run: Run) -> None:
             " and attached to the trace." if attached else "."
         )
         st.rerun()
-
-
-def _is_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 main()

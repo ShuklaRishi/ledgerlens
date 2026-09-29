@@ -1,8 +1,8 @@
-# `make help` lists targets. Targets are added as each build phase lands.
+# `make help` lists targets.
 COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo docker-compose)
 
 .DEFAULT_GOAL := help
-.PHONY: help install fetch-data up down reset db-check psql seed ask api ui eval-v1 eval-v2 compare test lint fmt
+.PHONY: help install fetch-data up down reset db-check psql seed ask api ui eval-v1 eval-v2 compare rescore test lint fmt
 
 Q ?= What was revenue by store last month?
 
@@ -51,6 +51,10 @@ eval-v2: ## golden set against v2 (fixed); CASES=a,b runs a subset
 
 compare: ## compare the latest v1 and v2 eval reports (regressions first)
 	uv run python -m evals.compare --latest v1 v2
+
+rescore: ## re-score saved eval reports from their run records, no model calls (REPORTS=a.json b.json)
+	$(if $(REPORTS),,$(error set REPORTS to one or more evals/reports/*.json))
+	uv run python -m evals.rescore $(REPORTS)
 
 test: ## unit + integration tests (integration skips when the DB is down)
 	uv run pytest -q

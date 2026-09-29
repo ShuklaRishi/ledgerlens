@@ -49,6 +49,9 @@ def daily_quota_exhausted(error: object) -> bool:
     return "PerDay" in str(error)  # Google's quotaId, e.g. GenerateRequestsPerDay...FreeTier
 
 
+TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
+
 def is_transient(exc: Exception) -> bool:
     """Provider hiccups worth retrying: overload, per-minute limits, timeouts.
 
@@ -58,7 +61,7 @@ def is_transient(exc: Exception) -> bool:
     for error in (exc, exc.__cause__):
         if daily_quota_exhausted(error):
             return False
-        if isinstance(error, genai_errors.APIError) and error.code in {429, 500, 502, 503, 504}:
+        if isinstance(error, genai_errors.APIError) and error.code in TRANSIENT_STATUS_CODES:
             return True
         if isinstance(error, httpx.TimeoutException):
             return True
