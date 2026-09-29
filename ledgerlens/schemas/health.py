@@ -1,3 +1,5 @@
+"""GET /health response: one check per dependency, and an overall status."""
+
 from typing import Literal
 
 from pydantic import BaseModel

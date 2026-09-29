@@ -23,7 +23,7 @@ class QueryResult(BaseModel):
         return [
             i
             for i, name in enumerate(self.columns)
-            if not _is_identifier(name) and all(_is_number(v) for v in self._values(i))
+            if not _is_identifier(name) and all(is_number(v) for v in self._values(i))
         ]
 
     def temporal_indexes(self) -> list[int]:
@@ -65,7 +65,7 @@ def _plain(value: Any) -> Any:
     return float(value) if isinstance(value, Decimal) else value
 
 
-def _is_number(value: Any) -> bool:
+def is_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 

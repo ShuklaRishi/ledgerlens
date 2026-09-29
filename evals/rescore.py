@@ -12,7 +12,7 @@ from pathlib import Path
 
 from evals.cases import expected_rows, load_cases
 from evals.report import write_run_report
-from evals.scoring import by_target, score, summarize
+from evals.scoring import report_sections, score
 from ledgerlens.core.config import get_settings
 from ledgerlens.db.connection import connect_agent
 from ledgerlens.services.run_store import RunStore
@@ -36,9 +36,7 @@ def main(argv: list[str] | None = None) -> int:
                 case = cases[saved["case_id"]]
                 record = store.load(saved["run_id"])
                 results.append(score(case, expected_rows(conn, case), record, catalog))
-            report["summary"] = summarize(results)
-            report["by_target"] = by_target(results)
-            report["results"] = [result.model_dump() for result in results]
+            report |= report_sections(results)
             _, md_path = write_run_report(report)
             print(f"{path.name}: passed {report['summary']['passed']}/{len(results)} -> {md_path}")
     return 0

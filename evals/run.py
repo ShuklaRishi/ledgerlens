@@ -10,9 +10,9 @@ Every run is traced with its eval_case_id, and grouped into one session per eval
 import argparse
 from datetime import UTC, datetime
 
-from evals.cases import expected_rows, load_cases
+from evals.cases import GoldenCase, expected_rows, load_cases
 from evals.report import write_run_report
-from evals.scoring import CaseResult, by_target, score, summarize
+from evals.scoring import CaseResult, report_sections, score
 from ledgerlens.agent.failure_modes import active_failure_modes, label
 from ledgerlens.agent.llm import daily_quota_exhausted
 from ledgerlens.core.config import get_settings
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
                 expected = {case.id: expected_rows(conn, case) for case in cases}
             service = AgentService(settings, pool, store)
             for number, case in enumerate(cases, 1):
-                record = _ask(service, store, case.question, case.user_role, session_id, case.id)
+                record = _ask(service, store, case, session_id)
                 result = score(case, expected[case.id], record, catalog)
                 results.append(result)
                 verdict = "pass" if result.passed else "FAIL"
@@ -82,9 +82,7 @@ def main(argv: list[str] | None = None) -> int:
             "finished_at": datetime.now(UTC).isoformat(),
             "stopped_early": stopped_early,
         },
-        "summary": summarize(results),
-        "by_target": by_target(results),
-        "results": [result.model_dump() for result in results],
+        **report_sections(results),
     }
     json_path, md_path = write_run_report(report)
     summary = report["summary"]
@@ -92,12 +90,10 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _ask(
-    service: AgentService, store: RunStore, question: str, role: str, session_id: str, case_id: str
-) -> RunRecord:
-    request = AskRequest(question=question, user_role=role, session_id=session_id)
+def _ask(service: AgentService, store: RunStore, case: GoldenCase, session_id: str) -> RunRecord:
+    request = AskRequest(question=case.question, user_role=case.user_role, session_id=session_id)
     try:
-        return service.ask(request, eval_case_id=case_id)
+        return service.ask(request, eval_case_id=case.id)
     except AgentRunError as exc:  # a crash is a result too: score the saved record
         return store.load(exc.run_id)
 

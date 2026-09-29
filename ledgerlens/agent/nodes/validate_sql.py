@@ -4,7 +4,7 @@ from typing import Any
 
 from ledgerlens.agent.deps import AgentDeps
 from ledgerlens.agent.failure_modes import FailureMode
-from ledgerlens.agent.state import AgentState, SqlAttempt
+from ledgerlens.agent.state import AgentState, record_attempt
 from ledgerlens.sql.executor import explain
 from ledgerlens.sql.validator import validate_sql
 
@@ -22,5 +22,4 @@ def run(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         with deps.pool.connection() as conn:
             problem = explain(conn, sql)
         errors = [problem] if problem else []
-    attempt = SqlAttempt(attempt=state["sql_attempts"], stage="validate", sql=sql, errors=errors)
-    return {"sql_errors": errors, "attempt_log": [attempt]}
+    return {"sql_errors": errors, "attempt_log": [record_attempt(state, "validate", errors)]}

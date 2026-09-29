@@ -136,8 +136,7 @@ def render_comparison(a: dict[str, Any], b: dict[str, Any]) -> str:
     lines += [
         f"- **{c}** ({before[c]['targets'] or 'baseline'}): was {'; '.join(problems(before[c]))}"
         for c in fixed
-    ]
-    lines += [] if fixed else ["None."]
+    ] or ["None."]
     lines += ["", "## Failing in both", ""]
     lines += [f"- **{c}**: {'; '.join(problems(after[c]))}" for c in still_failing] or ["None."]
     lines += [
