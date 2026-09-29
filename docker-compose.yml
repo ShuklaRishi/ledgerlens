@@ -1,0 +1,39 @@
+# Postgres 16 + pgvector, loaded with the Pagila sample database on first start.
+# Init scripts in db/init run once, when the data volume is empty (`make reset` to rerun).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ledgerlens-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: pagila
+      AGENT_RO_PASSWORD: ${AGENT_RO_PASSWORD:-agent_ro}
+    ports:
+      - "${PG_PORT:-5433}:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/pagila:/pagila:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # TCP on purpose: during init the entrypoint runs a socket-only server, so this
+      # only goes healthy once Pagila is loaded and the real server is listening.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d pagila"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  phoenix:
+    # Local trace viewer and OTLP receiver: UI and /v1/traces on :6006. Traces persist in a volume.
+    image: arizephoenix/phoenix:version-20.16.0
+    container_name: ledgerlens-phoenix
+    environment:
+      PHOENIX_WORKING_DIR: /mnt/data
+    ports:
+      - "6006:6006"
+    volumes:
+      - phoenixdata:/mnt/data
+
+volumes:
+  pgdata:
+  phoenixdata:

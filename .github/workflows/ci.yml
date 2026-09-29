@@ -1,0 +1,40 @@
+# Lint, unit tests, then the real database: no API keys needed, no model calls made.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Lint
+        run: make lint
+
+      - name: Unit tests (no database, no model)
+        run: uv run pytest tests/unit -q
+
+      - name: Start Postgres 16 + pgvector with Pagila
+        run: |
+          ./db/fetch_pagila.sh
+          docker compose up -d --wait db
+
+      - name: Prove the agent's database role is read-only
+        run: uv run ledgerlens db-check
+
+      - name: Seed the semantic layer (local embeddings)
+        run: uv run ledgerlens seed
+
+      - name: Integration tests (metrics, golden-set ground truth, retrieval)
+        run: uv run pytest tests/integration -q

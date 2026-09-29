@@ -1,0 +1,59 @@
+[project]
+name = "ledgerlens"
+version = "0.1.0"
+description = "A traced, evaluated text-to-SQL analytics agent over the Pagila sample database."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "psycopg[binary,pool]>=3.2",
+    "langgraph>=1.2.12",
+    "langchain-core>=1.6.5",
+    "langchain-google-genai>=4.4.0",
+    "fastembed>=0.8.1",
+    "sqlglot>=30.20.0",
+    "matplotlib>=3.11.2",
+    "pyyaml>=6.0.3",
+    "opentelemetry-api>=1.45.0",
+    "opentelemetry-sdk>=1.45.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
+    "openinference-semantic-conventions>=0.1.39",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+ledgerlens = "ledgerlens.cli:main"
+
+[project.optional-dependencies]
+neatlogs = [
+    "opentelemetry-exporter-otlp-proto-grpc>=1.45.0",
+]
+ui = [
+    "streamlit>=1.64.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13",  # starlette's TestClient transport
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+markers = ["integration: needs the local Postgres from `make up`"]
