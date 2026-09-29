@@ -148,9 +148,30 @@ docs/                 LOGGING.md, LOOM_SCRIPT.md
 - **Tracing backend.** Traces go to Phoenix locally. Because the spans are plain
   OpenTelemetry, `NEATLOGS_API_KEY` adds a second exporter to Neatlogs over OTLP/gRPC as
   their docs describe (`uv sync --extra neatlogs`). It is untested: I couldn't create an
-  account. [FEEDBACK.md](FEEDBACK.md) has what I found evaluating their SDK.
+  account.
 - **Data.** [Pagila](https://github.com/devrimgunduz/pagila) (c) Devrim Gündüz, MIT-style
   licence, fetched at a pinned commit with checksums by `db/fetch_pagila.sh`; not vendored.
   No real company or customer data is used anywhere.
 - **Gemini free tier.** Requests may be used by Google to improve its products, which is fine
   for this public sample data and would not be for real customer data.
+
+## What could be improved
+
+- **Conversation memory.** `session_id` only groups traces, so a follow-up like "and for
+  store 2?" is answered as a new question. Next: pass the previous question and SQL into
+  routing and planning.
+- **Check the prose, not just the data.** The evals compare the query result with the ground
+  truth, but the model writes the headline's numbers from that result and could misstate
+  one. Next: check that every number in the headline appears in the result.
+- **More eval runs.** 20 cases and one run per version on the final code, while the model
+  can write different SQL from one run to the next. Next: run each case several times and
+  report how often every run passes.
+- **Wider checks.** The fan-out probe skips queries that read from CTEs or subqueries, and
+  relative dates cover common phrases only ("last 2 quarters" isn't recognised).
+- **From 👎 to test case.** Flagged runs become golden-set cases by hand. Next: one command
+  that turns a flagged run into a draft case to review.
+- **Non-blocking requests.** `POST /v1/ask` holds the connection for seconds, up to a minute
+  when the free tier is overloaded. Next: run questions in the background and stream progress
+  to the UI.
+- **Production plumbing.** No authentication, run records live on local disk, and the
+  Neatlogs exporter is untested.
