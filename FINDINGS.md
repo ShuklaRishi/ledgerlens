@@ -41,8 +41,8 @@ with *"Says there was no revenue last month, but June was a normal month."*
 - `execute_sql`: `row_count: 0`.
 - `check_result`: warning `empty_result`. v1 still turned it into a confident "no revenue".
 
-![TODO: screenshot of the chat answer with the thumbs-down comment](docs/img/date-boundary-ui.png)
-![TODO: screenshot of the trace, resolve_dates span selected, anchor_source visible](docs/img/date-boundary-trace.png)
+![v1 says there was no revenue last month; the user gives it a thumbs-down with a comment](docs/img/date-boundary-ui.png)
+![The trace: resolve_dates anchored "last month" to today's date, 2026-09-28](docs/img/date-boundary-trace.png)
 
 **Root cause.** `resolve_dates` anchored relative dates to `date.today()`. The data ends on
 27 Jul 2022 (payments) and 23 Aug 2022 (rentals).
@@ -73,7 +73,7 @@ later span passed: the SQL was valid, nothing was multiplied, the numbers looked
 In an earlier isolated run, v1 filtered on both dates at once and got $864 instead of
 $5,551.
 
-![TODO: screenshot of the plan_sql span with the generated SQL](docs/img/two-facts-trace.png)
+![The plan_sql span: rentals counted through payments, filtered only on payment_date](docs/img/two-facts-trace.png)
 
 **Root cause.** The v1 planner prompt had no grain rule. Each fact has its own date:
 revenue belongs to `payment_date`, rentals to `rental_date`.

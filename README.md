@@ -7,8 +7,7 @@ every run as a trace a developer can open from a business user's 👎. A golden-
 whether a change made it better or worse: the repo ships the agent both as first built (v1,
 five realistic failure modes) and fixed (v2).
 
-<!-- TODO(me): screenshot of the chat with a 👎 and the matching trace in Phoenix -->
-![TODO: screenshot of the chat UI next to the trace in Phoenix](docs/img/ui-and-trace.png)
+![The chat UI answering a trend question, next to the same run's trace in Phoenix](docs/img/ui-and-trace.png)
 
 ## How it works
 
