@@ -117,9 +117,14 @@ def fetch_run(run_id: str) -> Run | None:
     return response.json()
 
 
+def escape_dollars(text: str) -> str:
+    """Keep $ literal in Markdown: Streamlit renders text between two $ signs as LaTeX."""
+    return text.replace("$", r"\$")
+
+
 def show_turn(run: Run) -> None:
     with st.chat_message("user"):
-        st.write(run["question"])
+        st.markdown(escape_dollars(run["question"]))
     with st.chat_message("assistant"):
         show_answer(run)
         show_details(run)
@@ -133,15 +138,15 @@ def show_answer(run: Run) -> None:
             "Something went wrong on our side. The run was saved so the team can look into it."
         )
         return
-    st.markdown(f"**{answer['headline']}**")
+    st.markdown(f"**{escape_dollars(answer['headline'])}**")
     if answer.get("interpretation"):
-        st.write(answer["interpretation"])
+        st.markdown(escape_dollars(answer["interpretation"]))
     show_result(run)
     for warning in answer.get("warnings", []):
-        st.warning(warning, icon="⚠️")
+        st.warning(escape_dollars(warning), icon="⚠️")
     notes = [note for note in (answer.get("definition"), answer.get("timeframe")) if note]
     if notes:
-        st.caption("  \n".join(notes))
+        st.caption(escape_dollars("  \n".join(notes)))
 
 
 def show_result(run: Run) -> None:
@@ -168,22 +173,24 @@ def show_result(run: Run) -> None:
 def show_details(run: Run) -> None:
     with st.expander("How I got this"):
         route = run.get("route") or {}
-        st.markdown(f"**Route:** {route.get('route', '-')}: {route.get('reason', '')}")
+        st.markdown(
+            f"**Route:** {route.get('route', '-')}: {escape_dollars(route.get('reason', ''))}"
+        )
         if retrieved := run.get("retrieved"):
             metrics = ", ".join(
                 f"{hit['name']} ({hit['score']:.2f})" for hit in retrieved["metrics"]
             )
             st.markdown(f"**Definitions considered:** {metrics}")
         if run.get("plan"):
-            st.markdown(f"**Plan:** {run['plan']}")
+            st.markdown(f"**Plan:** {escape_dollars(run['plan'])}")
         if run.get("sql"):
             st.code(run["sql"], language="sql")
         for attempt in run.get("attempts", []):
             if attempt["errors"]:
-                errors = "; ".join(attempt["errors"])
+                errors = escape_dollars("; ".join(attempt["errors"]))
                 st.caption(f"Attempt {attempt['attempt']} ({attempt['stage']}) rejected: {errors}")
         if run.get("error"):
-            st.caption(f"Error: {run['error']}")
+            st.caption(escape_dollars(f"Error: {run['error']}"))
         usage = run["usage"]
         tokens = usage["input_tokens"] + usage["output_tokens"]
         st.caption(
